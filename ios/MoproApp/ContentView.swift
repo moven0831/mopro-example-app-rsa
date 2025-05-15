@@ -40,9 +40,10 @@ struct ContentView: View {
     @State private var circomPublicInputs: [String]?
     @State private var generatedHalo2Proof: Data?
     @State private var halo2PublicInputs: Data?
-    @State private var isKeccakProveButtonEnabled = true
-    @State private var isKeccakVerifyButtonEnabled = false
-    @State private var generatedKeccakProof: Data?
+    @State private var isRSAPRAroveButtonEnabled = true
+    @State private var isRSAVerifyButtonEnabled = false
+    @State private var generatedRSAProof: Data?
+    @State private var rsaInputs: [String]?
     private let zkeyPath = Bundle.main.path(forResource: "multiplier2_final", ofType: "zkey")!
     private let srsPath = Bundle.main.path(forResource: "plonk_fibonacci_srs.bin", ofType: "")!
     private let vkPath = Bundle.main.path(forResource: "plonk_fibonacci_vk.bin", ofType: "")!
@@ -57,8 +58,8 @@ struct ContentView: View {
             Button("Verify Circom", action: runCircomVerifyAction).disabled(!isCircomVerifyButtonEnabled).accessibilityIdentifier("verifyCircom")
             Button("Prove Halo2", action: runHalo2ProveAction).disabled(!isHalo2roveButtonEnabled).accessibilityIdentifier("proveHalo2")
             Button("Verify Halo2", action: runHalo2VerifyAction).disabled(!isHalo2VerifyButtonEnabled).accessibilityIdentifier("verifyHalo2")
-            Button("Prove Keccak256", action: runKeccakProveAction).disabled(!isKeccakProveButtonEnabled).accessibilityIdentifier("proveKeccak")
-            Button("Verify Keccak256", action: runKeccakVerifyAction).disabled(!isKeccakVerifyButtonEnabled).accessibilityIdentifier("verifyKeccak")
+            Button("Prove RSA", action: runRSAProveAction).disabled(!isRSAPRAroveButtonEnabled).accessibilityIdentifier("proveRSA")
+            Button("Verify RSA", action: runRSAVerifyAction).disabled(!isRSAVerifyButtonEnabled).accessibilityIdentifier("verifyRSA")
 
             ScrollView {
                 Text(textViewText)
@@ -201,8 +202,8 @@ extension ContentView {
         }
     }
 
-    func runKeccakProveAction() {
-        textViewText += "Generating Keccak256 proof... "
+    func runRSAProveAction() {
+        textViewText += "Generating RSA proof... "
 
         guard let srsPath = Bundle.main.path(forResource: "zkemail_srs", ofType: "local") else {
             DispatchQueue.main.async {
@@ -211,31 +212,46 @@ extension ContentView {
             return
         }
 
-        let example_x_values: [UInt8] = [123, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        let example_result_values: [UInt8] = [117, 161, 42, 122, 171, 96, 25, 82, 239, 113, 221, 109, 167, 23, 37, 234, 164, 235, 120, 131, 9, 96, 103, 84, 108, 138, 227, 249, 156, 201, 34, 46]
-        let inputsArray: [UInt8] = example_x_values + example_result_values
-        let inputsData = Data(inputsArray)
+        // Inputs from Prover.toml
+        let inputs: [String] = [
+            "0xad29e07d16a278de49a371b9760a27",
+            "0x86311920cc0e17a3c20cdff4c56dbb",
+            "0x863556c6c5247dd83668dd825716ae",
+            "0xc247c960945f4485b46c33b87425ca",
+            "0x7326463c5c4cd5b08e21b938d9ed9a",
+            "0x4f89fe0c82da08a0259eddb34d0da1",
+            "0x43a74e76d4e1bd2666f1591889af0d",
+            "0x240f7b80f0ff29f4253ee3019f832d",
+            "0xc6edd131fbaaf725fd423dac52b362",
+            "0x85f9732679242163e8afff44f6104d",
+            "0xd3c3bbcb1757013fd6fb80f31dd9a6",
+            "0x9008633f15df440e6df6d21ee585a2",
+            "0x324df3425ed256e283be5b6b761741",
+            "0xc60c1302929bd0e07caa4aeff4e8fd",
+            "0x600d804ff13ba8d0e1bc9508714212",
+            "0x50f7e75e5751d7edd61167027926be",
+            "0x0db41d39442023e1420a8a84fe81d9",
+            "0xab",
+        ]
+        self.rsaInputs = inputs // Store for verification
 
-        // Run in background thread to avoid blocking the UI
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let start = CFAbsoluteTimeGetCurrent()
 
-                let proofData = try! proveKeccak256Simple(srsPath: srsPath, inputs: inputsData)
+                let proofData = try! proveRsaSimple(srsPath: srsPath, inputs: inputs)
                 assert(!proofData.isEmpty, "Proof should not be empty")
 
                 let end = CFAbsoluteTimeGetCurrent()
                 let timeTaken = end - start
 
-                // Update UI on the main thread
                 DispatchQueue.main.async {
-                    self.generatedKeccakProof = proofData
+                    self.generatedRSAProof = proofData
                     self.textViewText += "\(String(format: "%.3f", timeTaken))s 1️⃣\n"
-                    self.isKeccakVerifyButtonEnabled = true
-                    self.isKeccakProveButtonEnabled = false // Disable prove button after successful proof
+                    self.isRSAVerifyButtonEnabled = true
+                    self.isRSAPRAroveButtonEnabled = false
                 }
             } catch {
-                // Update UI on the main thread
                 DispatchQueue.main.async {
                     self.textViewText += "\nProof generation failed: \(error.localizedDescription)\n"
                 }
@@ -243,8 +259,8 @@ extension ContentView {
         }
     }
 
-    func runKeccakVerifyAction() {
-        guard let proofData = generatedKeccakProof else {
+    func runRSAVerifyAction() {
+        guard let proofData = generatedRSAProof else {
             textViewText += "Proof has not been generated yet.\n"
             return
         }
@@ -256,39 +272,34 @@ extension ContentView {
             return
         }
 
-        textViewText += "Verifying Keccak256 proof... "
+        textViewText += "Verifying RSA proof... "
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let start = CFAbsoluteTimeGetCurrent()
 
-                // Pass proofData (which is Data) directly to the FFI function
-                let isValid = try! verifyKeccak256Simple(srsPath: srsPath, proof: proofData)
+                let isValid = try! verifyRsaSimple(srsPath: srsPath, proof: proofData)
                 let end = CFAbsoluteTimeGetCurrent()
                 let timeTaken = end - start
 
-                // Update UI on the main thread
                 DispatchQueue.main.async {
                     if isValid {
                         self.textViewText += "\(String(format: "%.3f", timeTaken))s 2️⃣\n"
                     } else {
                         self.textViewText += "\nProof verification failed.\n"
                     }
-                    self.isKeccakVerifyButtonEnabled = false
-                    // Optionally re-enable prove button or handle state differently after verification
-                     self.isKeccakProveButtonEnabled = true 
+                    self.isRSAVerifyButtonEnabled = false
+                    self.isRSAPRAroveButtonEnabled = true
                 }
             } catch let error as MoproError {
-                // Update UI on the main thread
                 DispatchQueue.main.async {
                     self.textViewText += "\nMoproError: \(error)\n"
-                    self.isKeccakVerifyButtonEnabled = false // Keep verify disabled on error
+                    self.isRSAVerifyButtonEnabled = false
                 }
             } catch {
-                // Update UI on the main thread
                 DispatchQueue.main.async {
                     self.textViewText += "\nUnexpected error: \(error.localizedDescription)\n"
-                    self.isKeccakVerifyButtonEnabled = false // Keep verify disabled on error
+                    self.isRSAVerifyButtonEnabled = false
                 }
             }
         }
